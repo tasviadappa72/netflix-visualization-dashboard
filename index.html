@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Netflix Explorer Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- D3 -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <!-- Word cloud layout -->
+  <script src="https://unpkg.com/d3-cloud@1/build/d3.layout.cloud.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Left sidebar -->
+    <aside id="sidebar">
+      <header id="sidebar-title">
+        <h1>Netflix Explorer</h1>
+      </header>
+
+      <!-- Word cloud -->
+      <section class="sidebar-section">
+        <div class="section-header">Title Word Cloud</div>
+        <div id="wordCloud"></div>
+      </section>
+
+      <!-- Year slider -->
+      <section class="sidebar-section">
+        <div class="section-header">Select Year Range</div>
+        <div class="slider-row">
+          <span id="yearMinLabel">Min</span>
+          <span id="yearMaxLabel">Max</span>
+        </div>
+        <input type="range" id="yearMinSlider" />
+        <input type="range" id="yearMaxSlider" />
+        <div class="slider-caption">
+          Drag the sliders to restrict movies & TV shows by release year.
+        </div>
+      </section>
+
+      <!-- Genre filter -->
+      <section class="sidebar-section">
+        <div class="section-header">Select Genres</div>
+        <select id="genreSelect" multiple></select>
+        <div class="hint">Cmd/Ctrl + click to select multiple.</div>
+      </section>
+
+      <!-- Rating filter -->
+      <section class="sidebar-section">
+        <div class="section-header">Select Ratings</div>
+        <div id="ratingCheckboxes"></div>
+      </section>
+    </aside>
+
+    <!-- Main content -->
+    <main id="main">
+      <!-- Map -->
+      <section class="card card-wide">
+        <h2>Movies and TV Shows Produced Worldwide</h2>
+        <div id="mapContainer">
+          <div id="map"></div>
+        </div>
+      </section>
+
+      <!-- Bottom row -->
+      <section id="bottom-row">
+        <div class="card">
+          <h2>Top 10 Directors</h2>
+          <div id="topDirectors"></div>
+        </div>
+        <div class="card">
+          <h2>Durations</h2>
+          <div id="durations"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
