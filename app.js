@@ -9,6 +9,7 @@ const defaultHeight = 240;
 
 let allData = [];
 let worldGeo = null;
+let selectedCountry = null; // map click filter
 
 // Create / clear SVG in container
 function createSvg(containerSelector, width = defaultWidth, height = defaultHeight) {
@@ -36,7 +37,7 @@ function parseGenres(str) {
   return str.split(",").map(s => s.trim()).filter(Boolean);
 }
 
-// A small list of stopwords for title word cloud
+// Small stopword list for title word cloud
 const STOPWORDS = new Set([
   "the", "a", "an", "of", "and", "in", "on", "to", "for", "at",
   "with", "by", "from", "la", "el", "los", "las", "de", "da",
@@ -73,7 +74,7 @@ Promise.all([
 
 // -------- Filters --------
 function initFilters(data) {
-  // Year sliders
+  // Year slider (single)
   const years = data
     .map(d => d.release_year)
     .filter(y => y && !isNaN(y));
@@ -81,56 +82,36 @@ function initFilters(data) {
   const minYear = d3.min(years);
   const maxYear = d3.max(years);
 
-  const yearMinSlider = d3.select("#yearMinSlider")
+  const yearSlider = d3.select("#yearSlider")
     .attr("min", minYear)
     .attr("max", maxYear)
     .attr("value", minYear);
 
-  const yearMaxSlider = d3.select("#yearMaxSlider")
-    .attr("min", minYear)
-    .attr("max", maxYear)
-    .attr("value", maxYear);
+  d3.select("#yearLabel").text(minYear);
 
-  d3.select("#yearMinLabel").text(minYear);
-  d3.select("#yearMaxLabel").text(maxYear);
-
-  yearMinSlider.on("input", () => {
-    const minVal = +yearMinSlider.property("value");
-    let maxVal = +yearMaxSlider.property("value");
-    if (minVal > maxVal) {
-      maxVal = minVal;
-      yearMaxSlider.property("value", maxVal);
-    }
-    d3.select("#yearMinLabel").text(minVal);
-    d3.select("#yearMaxLabel").text(maxVal);
+  yearSlider.on("input", () => {
+    const val = +yearSlider.property("value");
+    d3.select("#yearLabel").text(val);
     updateAll();
   });
 
-  yearMaxSlider.on("input", () => {
-    let minVal = +yearMinSlider.property("value");
-    const maxVal = +yearMaxSlider.property("value");
-    if (maxVal < minVal) {
-      minVal = maxVal;
-      yearMinSlider.property("value", minVal);
-    }
-    d3.select("#yearMinLabel").text(minVal);
-    d3.select("#yearMaxLabel").text(maxVal);
-    updateAll();
-  });
-
-  // Genres (from listed_in)
+  // Genre dropdown
   const allGenres = new Set();
   data.forEach(d => {
     parseGenres(d.listed_in).forEach(g => allGenres.add(g));
   });
-
   const sortedGenres = Array.from(allGenres).sort(d3.ascending);
-  const genreSelect = d3.select("#genreSelect");
 
-  genreSelect.selectAll("option")
+  const genreSelect = d3.select("#genreSelect");
+  genreSelect.append("option")
+    .attr("value", "All")
+    .text("All genres");
+
+  genreSelect.selectAll("option.genre-option")
     .data(sortedGenres)
     .enter()
     .append("option")
+    .attr("class", "genre-option")
     .attr("value", d => d)
     .text(d => d);
 
@@ -138,58 +119,56 @@ function initFilters(data) {
     updateAll();
   });
 
-  // Ratings (checkboxes)
+  // Rating dropdown
   const allRatings = Array.from(
     new Set(data.map(d => d.rating || "Unknown"))
   ).sort(d3.ascending);
 
-  const ratingContainer = d3.select("#ratingCheckboxes");
+  const ratingSelect = d3.select("#ratingSelect");
+  ratingSelect.append("option")
+    .attr("value", "All")
+    .text("All ratings");
 
-  const ratingDivs = ratingContainer.selectAll("div.rating-pill")
+  ratingSelect.selectAll("option.rating-option")
     .data(allRatings)
     .enter()
-    .append("div")
-    .attr("class", "rating-pill");
-
-  ratingDivs.append("input")
-    .attr("type", "checkbox")
+    .append("option")
+    .attr("class", "rating-option")
     .attr("value", d => d)
-    .attr("id", d => `rating-${d.replace(/\W+/g, "_")}`)
-    .property("checked", true)
-    .on("change", () => updateAll());
-
-  ratingDivs.append("label")
-    .attr("for", d => `rating-${d.replace(/\W+/g, "_")}`)
     .text(d => d);
+
+  ratingSelect.on("change", () => {
+    updateAll();
+  });
+
+  // Country label
+  d3.select("#countryLabel").text("All countries");
 }
 
 // Get filtered data based on current UI filters
 function getFilteredData() {
-  const yearMin = +d3.select("#yearMinSlider").property("value");
-  const yearMax = +d3.select("#yearMaxSlider").property("value");
+  const selectedYear = +d3.select("#yearSlider").property("value");
+  const selectedGenre = d3.select("#genreSelect").property("value");
+  const selectedRating = d3.select("#ratingSelect").property("value");
 
-  const genreSelectNode = document.getElementById("genreSelect");
-  const selectedGenres = Array.from(genreSelectNode.selectedOptions).map(o => o.value);
+  let filtered = allData.filter(d => d.release_year === selectedYear);
 
-  const checkedRatings = [];
-  d3.selectAll("#ratingCheckboxes input:checked").each(function () {
-    checkedRatings.push(this.value);
-  });
-
-  let filtered = allData.filter(d =>
-    d.release_year >= yearMin &&
-    d.release_year <= yearMax
-  );
-
-  if (selectedGenres.length > 0) {
+  if (selectedGenre && selectedGenre !== "All") {
     filtered = filtered.filter(d => {
       const rowGenres = parseGenres(d.listed_in);
-      return rowGenres.some(g => selectedGenres.includes(g));
+      return rowGenres.includes(selectedGenre);
     });
   }
 
-  if (checkedRatings.length > 0) {
-    filtered = filtered.filter(d => checkedRatings.includes(d.rating));
+  if (selectedRating && selectedRating !== "All") {
+    filtered = filtered.filter(d => d.rating === selectedRating);
+  }
+
+  if (selectedCountry) {
+    filtered = filtered.filter(d => {
+      const countries = parseCountries(d.country);
+      return countries.includes(selectedCountry);
+    });
   }
 
   return filtered;
@@ -221,7 +200,6 @@ function drawWordCloud(data) {
     return;
   }
 
-  // Build word frequencies from titles
   const freqMap = new Map();
 
   data.forEach(d => {
@@ -238,7 +216,7 @@ function drawWordCloud(data) {
 
   let wordsArray = Array.from(freqMap, ([text, count]) => ({ text, count }));
   wordsArray.sort((a, b) => d3.descending(a.count, b.count));
-  wordsArray = wordsArray.slice(0, 60); // top 60 words
+  wordsArray = wordsArray.slice(0, 60);
 
   const counts = wordsArray.map(d => d.count);
   const sizeScale = d3.scaleLinear()
@@ -281,10 +259,11 @@ function drawWordCloud(data) {
 
 // -------- 2) World map with bubbles by country --------
 function drawMap(data) {
-  const { svg, g, width, height } = createSvg("#map", 650, 300);
+  const { g, width, height } = createSvg("#map", 760, 340); // bigger width/height
 
   if (!worldGeo) return;
 
+  // Explode countries
   const exploded = [];
   data.forEach(d => {
     const countries = parseCountries(d.country);
@@ -316,6 +295,7 @@ function drawMap(data) {
 
   const path = d3.geoPath().projection(projection);
 
+  // Base countries
   g.selectAll("path.country")
     .data(worldGeo.features)
     .enter()
@@ -326,8 +306,9 @@ function drawMap(data) {
 
   const circleScale = d3.scaleSqrt()
     .domain([d3.min(allCounts), d3.max(allCounts)])
-    .range([2, 18]);
+    .range([3, 22]);
 
+  // Data joined to features for centroid & click filter
   const bubbleData = worldGeo.features
     .map(feat => {
       const name = feat.properties.name;
@@ -338,18 +319,30 @@ function drawMap(data) {
     })
     .filter(Boolean);
 
-  g.selectAll("circle.bubble")
-    .data(bubbleData)
-    .enter()
+  const bubbles = g.selectAll("circle.bubble")
+    .data(bubbleData, d => d.name);
+
+  bubbles.enter()
     .append("circle")
     .attr("class", "bubble")
     .attr("cx", d => d.x)
     .attr("cy", d => d.y)
     .attr("r", d => circleScale(d.count))
-    .attr("fill", "#ef4444")
-    .attr("fill-opacity", 0.7)
-    .attr("stroke", "#f9fafb")
-    .attr("stroke-width", 0.5)
+    .attr("fill", d => selectedCountry === d.name ? "#facc15" : "#ef4444")
+    .attr("fill-opacity", 0.75)
+    .attr("stroke", d => selectedCountry === d.name ? "#facc15" : "#f9fafb")
+    .attr("stroke-width", d => selectedCountry === d.name ? 2 : 0.6)
+    .on("click", (event, d) => {
+      // Toggle country filter
+      if (selectedCountry === d.name) {
+        selectedCountry = null;
+        d3.select("#countryLabel").text("All countries");
+      } else {
+        selectedCountry = d.name;
+        d3.select("#countryLabel").text(selectedCountry);
+      }
+      updateAll();
+    })
     .append("title")
     .text(d => `${d.name}\nTitles: ${d.count}`);
 }

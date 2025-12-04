@@ -26,37 +26,44 @@
         <div id="wordCloud"></div>
       </section>
 
-      <!-- Year slider -->
+      <!-- Year slider (single year) -->
       <section class="sidebar-section">
-        <div class="section-header">Select Year Range</div>
-        <div class="slider-row">
-          <span id="yearMinLabel">Min</span>
-          <span id="yearMaxLabel">Max</span>
+        <div class="section-header">Select Year</div>
+        <div class="year-row">
+          <span>Year:</span>
+          <span id="yearLabel">–</span>
         </div>
-        <input type="range" id="yearMinSlider" />
-        <input type="range" id="yearMaxSlider" />
+        <input type="range" id="yearSlider" />
         <div class="slider-caption">
-          Drag the sliders to restrict movies & TV shows by release year.
+          Move the slider to explore movies & TV shows released in a specific year.
         </div>
       </section>
 
-      <!-- Genre filter -->
+      <!-- Genre filter (dropdown) -->
       <section class="sidebar-section">
-        <div class="section-header">Select Genres</div>
-        <select id="genreSelect" multiple></select>
-        <div class="hint">Cmd/Ctrl + click to select multiple.</div>
+        <div class="section-header">Select Genre</div>
+        <select id="genreSelect"></select>
       </section>
 
-      <!-- Rating filter -->
+      <!-- Rating filter (dropdown) -->
       <section class="sidebar-section">
-        <div class="section-header">Select Ratings</div>
-        <div id="ratingCheckboxes"></div>
+        <div class="section-header">Select Rating</div>
+        <select id="ratingSelect"></select>
+      </section>
+
+      <!-- Country filter info -->
+      <section class="sidebar-section">
+        <div class="section-header">Country Filter</div>
+        <div class="country-info">
+          Click a country bubble on the map to filter all charts by that country.<br />
+          Current selection: <span id="countryLabel">All countries</span>
+        </div>
       </section>
     </aside>
 
     <!-- Main content -->
     <main id="main">
-      <!-- Map -->
+      <!-- Big Map -->
       <section class="card card-wide">
         <h2>Movies and TV Shows Produced Worldwide</h2>
         <div id="mapContainer">
