@@ -1,6 +1,6 @@
-// -------- Paths (public URLs) --------
-const DATA_PATH = "https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-04-20/netflix_titles.csv";
-const WORLD_GEO_PATH = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
+// -------- Paths (local files) --------
+const DATA_PATH = "data/Netflix_Dataset.csv";
+const WORLD_GEO_PATH = "data/world.geojson";
 
 // -------- Layout helpers --------
 const margin = { top: 20, right: 20, bottom: 35, left: 45 };
@@ -9,9 +9,12 @@ const defaultHeight = 240;
 
 let allData = [];
 let worldGeo = null;
-let selectedCountry = null;
 
-// Create / clear SVG
+let selectedCountry = null;   // map filter
+let selectedType = null;      // "Movie" or "TV Show" from pie
+let selectedDirector = null;  // director from bar chart
+
+// -------- SVG helper --------
 function createSvg(containerSelector, width = defaultWidth, height = defaultHeight) {
   d3.select(containerSelector).selectAll("*").remove();
 
@@ -26,7 +29,7 @@ function createSvg(containerSelector, width = defaultWidth, height = defaultHeig
   return { svg, g, width, height };
 }
 
-// Helpers
+// -------- Helpers --------
 function parseCountries(str) {
   if (!str) return [];
   return str.split(",").map(s => s.trim()).filter(Boolean);
@@ -57,10 +60,12 @@ Promise.all([
     director: d.director || "",
     cast: d.cast || "",
     country: d.country || "",
+    date_added: d.date_added || "",
     release_year: d.release_year ? +d.release_year : null,
     rating: d.rating || "Unknown",
     duration: d.duration || "",
-    listed_in: d.listed_in || ""
+    listed_in: d.listed_in || "",
+    description: d.description || ""
   })).filter(d => d.title && d.type && d.release_year);
 
   console.log("Data loaded successfully! Total rows:", allData.length);
@@ -69,15 +74,17 @@ Promise.all([
   updateAll();
 }).catch(err => {
   console.error("Error loading data:", err);
-  alert("Data load failed. Check internet and console (F12).");
+  alert("Data load failed. Check console (F12).");
 });
 
-// -------- Filters (1970 onwards only) --------
+// -------- Filters (1980 onwards only) --------
 function initFilters(data) {
-  const filteredData = data.filter(d => d.release_year >= 1970);
+  // Use only titles from 1980 onwards for filters
+  const filteredData = data.filter(d => d.release_year >= 1980);
 
+  // Years for the slider
   const years = filteredData.map(d => d.release_year).filter(y => y);
-  const minYear = d3.min(years) || 1970;
+  const minYear = d3.min(years);
   const maxYear = d3.max(years);
 
   const yearSlider = d3.select("#yearSlider")
@@ -94,37 +101,57 @@ function initFilters(data) {
     updateAll();
   });
 
+  // ---- Genre dropdown ----
   const allGenres = new Set();
   filteredData.forEach(d => parseGenres(d.listed_in).forEach(g => allGenres.add(g)));
   const sortedGenres = Array.from(allGenres).sort();
 
-  d3.select("#genreSelect")
-    .append("option").attr("value", "All").text("All genres")
-    .selectAll("option")
+  const genreSelect = d3.select("#genreSelect");
+  genreSelect.selectAll("*").remove();
+  genreSelect
+    .append("option")
+    .attr("value", "All")
+    .text("All genres");
+
+  genreSelect
+    .selectAll("option.genre-option")
     .data(sortedGenres)
     .enter()
     .append("option")
+    .attr("class", "genre-option")
     .attr("value", d => d)
     .text(d => d);
 
-  d3.select("#genreSelect").on("change", updateAll);
+  genreSelect.on("change", updateAll);
 
-  const allRatings = Array.from(new Set(filteredData.map(d => d.rating || "Unknown"))).sort();
+  // ---- Rating dropdown ----
+  const allRatings = Array.from(
+    new Set(filteredData.map(d => d.rating || "Unknown"))
+  ).sort();
 
-  d3.select("#ratingSelect")
-    .append("option").attr("value", "All").text("All ratings")
-    .selectAll("option")
+  const ratingSelect = d3.select("#ratingSelect");
+  ratingSelect.selectAll("*").remove();
+  ratingSelect
+    .append("option")
+    .attr("value", "All")
+    .text("All ratings");
+
+  ratingSelect
+    .selectAll("option.rating-option")
     .data(allRatings)
     .enter()
     .append("option")
+    .attr("class", "rating-option")
     .attr("value", d => d)
     .text(d => d);
 
-  d3.select("#ratingSelect").on("change", updateAll);
+  ratingSelect.on("change", updateAll);
 
+  // ---- Country label ----
   d3.select("#countryLabel").text("All countries");
 }
 
+// -------- Get filtered data based on all controls --------
 function getFilteredData() {
   const selectedYear = +d3.select("#yearSlider").property("value");
   const selectedGenre = d3.select("#genreSelect").property("value");
@@ -144,9 +171,21 @@ function getFilteredData() {
     filtered = filtered.filter(d => parseCountries(d.country).includes(selectedCountry));
   }
 
+  if (selectedType) {
+    filtered = filtered.filter(d => d.type === selectedType);
+  }
+
+  if (selectedDirector) {
+    filtered = filtered.filter(d =>
+      d.director &&
+      d.director.split(",").map(x => x.trim()).includes(selectedDirector)
+    );
+  }
+
   return filtered;
 }
 
+// -------- KPIs --------
 function updateKPIs(data) {
   if (!data || data.length === 0) {
     d3.select("#kpi-total-titles").text("0");
@@ -184,6 +223,7 @@ function updateKPIs(data) {
   d3.select("#kpi-avg-tv-seasons").text(avgTV || "–");
 }
 
+// -------- Master update --------
 function updateAll() {
   const filtered = getFilteredData();
   updateKPIs(filtered);
@@ -215,7 +255,10 @@ function drawWordCloud(data) {
 
   const freqMap = new Map();
   data.forEach(d => {
-    const words = d.title.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w && !STOPWORDS.has(w));
+    const words = d.title.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(w => w && !STOPWORDS.has(w));
     words.forEach(w => freqMap.set(w, (freqMap.get(w) || 0) + 1));
   });
 
@@ -251,7 +294,7 @@ function drawWordCloud(data) {
   layout.start();
 }
 
-// -------- 2) World Map with Country Names --------
+// -------- 2) World Map with Country Bubbles --------
 function drawMap(data) {
   const { g, width, height } = createSvg("#map", 760, 340);
 
@@ -262,6 +305,21 @@ function drawMap(data) {
     const countries = parseCountries(d.country);
     countries.forEach(c => exploded.push({ country: c }));
   });
+
+  // Base world map
+  const projection = d3.geoMercator()
+    .fitSize([width, height], worldGeo)
+    .scale(130)
+    .translate([width / 2, height / 1.5]);
+
+  const path = d3.geoPath().projection(projection);
+
+  g.selectAll("path.country")
+    .data(worldGeo.features)
+    .enter()
+    .append("path")
+    .attr("class", "country")
+    .attr("d", path);
 
   if (!exploded.length) {
     g.append("text")
@@ -276,21 +334,6 @@ function drawMap(data) {
   const countsArr = d3.rollups(exploded, v => v.length, d => d.country);
   const countsMap = new Map(countsArr.map(([c, n]) => [c, n]));
 
-  const projection = d3.geoMercator()
-    .fitSize([width, height], worldGeo)
-    .scale(130)
-    .translate([width / 2, height / 1.5]);
-
-  const path = d3.geoPath().projection(projection);
-
-  g.selectAll("path.country")
-    .data(worldGeo.features)
-    .enter()
-    .append("path")
-    .attr("class", "country")
-    .attr("d", path)
-    .attr("fill", "#111");
-
   const maxCount = d3.max(countsArr, d => d[1]);
   const circleScale = d3.scaleSqrt()
     .domain([0, maxCount])
@@ -300,13 +343,24 @@ function drawMap(data) {
     .map(feat => {
       const name = feat.properties.name;
       const count = countsMap.get(name);
-      if (!count || count < 3) return null;
+      if (!count) return null;   // show any country with at least 1 title
       const centroid = path.centroid(feat);
       if (!centroid || centroid.some(isNaN)) return null;
       return { name, count, x: centroid[0], y: centroid[1] };
     })
     .filter(Boolean);
 
+  if (!bubbleData.length) {
+    g.append("text")
+      .attr("x", width / 2)
+      .attr("y", height / 2)
+      .attr("text-anchor", "middle")
+      .attr("fill", "#d4d4d4")
+      .text("No country data for current filters.");
+    return;
+  }
+
+  // Slight jitter so bubbles don't overlap perfectly
   bubbleData.forEach(d => {
     d.x += Math.random() * 12 - 6;
     d.y += Math.random() * 12 - 6;
@@ -323,13 +377,14 @@ function drawMap(data) {
     .attr("fill", d => selectedCountry === d.name ? "#facc15" : "#ef4444")
     .attr("fill-opacity", 0.85)
     .attr("stroke", "#fff")
-    .attr("stroke-width", 2)
+    .attr("stroke-width", d => selectedCountry === d.name ? 4 : 2)
     .style("cursor", "pointer")
-    .on("mouseover", function() {
+    .on("mouseover", function () {
       d3.select(this).attr("stroke", "#facc15").attr("stroke-width", 4);
     })
-    .on("mouseout", function(d) {
-      d3.select(this).attr("stroke", "#fff").attr("stroke-width", selectedCountry === d.name ? 4 : 2);
+    .on("mouseout", function (event, d) {
+      d3.select(this).attr("stroke", "#fff")
+        .attr("stroke-width", selectedCountry === d.name ? 4 : 2);
     })
     .on("click", (event, d) => {
       selectedCountry = selectedCountry === d.name ? null : d.name;
@@ -358,7 +413,7 @@ function drawMap(data) {
     .text(d => d.name);
 }
 
-// -------- 3) Top 10 Directors --------
+// -------- 3) Top 10 Directors (interactive) --------
 function drawTopDirectors(data) {
   const { g, width, height } = createSvg("#topDirectors");
 
@@ -400,7 +455,12 @@ function drawTopDirectors(data) {
     .attr("x", 0)
     .attr("height", y.bandwidth())
     .attr("width", d => x(d.count))
-    .attr("fill", "#ef4444")
+    .attr("fill", d => selectedDirector === d.director ? "#facc15" : "#ef4444")
+    .style("cursor", "pointer")
+    .on("click", (event, d) => {
+      selectedDirector = (selectedDirector === d.director) ? null : d.director;
+      updateAll();
+    })
     .append("title")
     .text(d => `${d.director}\nTitles: ${d.count}`);
 
@@ -417,6 +477,15 @@ function drawTopDirectors(data) {
     .attr("class", "axis")
     .attr("transform", `translate(0,${height})`)
     .call(d3.axisBottom(x).ticks(5));
+
+  // X-axis label
+  g.append("text")
+    .attr("x", width / 2)
+    .attr("y", height + 30)
+    .attr("text-anchor", "middle")
+    .attr("fill", "#e2e8f0")
+    .attr("font-size", "12px")
+    .text("Number of Titles");
 }
 
 // -------- 4) Durations --------
@@ -516,7 +585,7 @@ function drawDurations(data) {
   }
 }
 
-// -------- 5) Pie Chart (Movies vs TV Shows) --------
+// -------- 5) Pie Chart (Movies vs TV Shows, interactive) --------
 function drawTypePie(data) {
   const { g, width, height } = createSvg("#typePie", 300, 280);
 
@@ -538,7 +607,9 @@ function drawTypePie(data) {
     { label: "TV Shows", value: tvShows }
   ].filter(d => d.value > 0);
 
-  const radius = Math.min(width, height) / 2 - 20;
+  const radius = Math.min(width, height) / 2 - 30;
+  const centerX = width / 2 - 40;
+  const centerY = height / 2 + 10;
 
   const pie = d3.pie().value(d => d.value);
   const arc = d3.arc().innerRadius(0).outerRadius(radius);
@@ -547,53 +618,59 @@ function drawTypePie(data) {
     .domain(pieData.map(d => d.label))
     .range(["#ef4444", "#f97373"]);
 
-  const arcs = g.selectAll("arc")
+  const pieGroup = g.append("g")
+    .attr("transform", `translate(${centerX},${centerY})`);
+
+  const typeMap = { "Movies": "Movie", "TV Shows": "TV Show" };
+
+  const arcs = pieGroup.selectAll("g.arc")
     .data(pie(pieData))
     .enter()
     .append("g")
-    .attr("transform", `translate(${width / 2},${height / 2})`);
+    .attr("class", "arc");
 
   arcs.append("path")
     .attr("d", arc)
-    .attr("fill", d => color(d.data.label))
+    .attr("fill", d => {
+      const t = typeMap[d.data.label];
+      return selectedType === t ? "#facc15" : color(d.data.label);
+    })
     .attr("stroke", "#fff")
     .attr("stroke-width", 2)
+    .style("cursor", "pointer")
+    .on("click", (event, d) => {
+      const t = typeMap[d.data.label];
+      selectedType = (selectedType === t) ? null : t;
+      updateAll();
+    })
     .append("title")
     .text(d => `${d.data.label}: ${d.data.value} (${((d.data.value / data.length) * 100).toFixed(1)}%)`);
 
-  // Center total
+  // Total titles text (outside the pie, above)
   g.append("text")
-    .attr("x", width / 2)
-    .attr("y", height / 2 - 10)
+    .attr("x", centerX)
+    .attr("y", centerY - radius - 12)
     .attr("text-anchor", "middle")
-    .attr("font-size", "20px")
+    .attr("font-size", "14px")
     .attr("font-weight", "bold")
-    .attr("fill", "#fff")
-    .text(data.length);
+    .attr("fill", "#ffffff")
+    .text(`Total Titles: ${data.length}`);
 
-  g.append("text")
-    .attr("x", width / 2)
-    .attr("y", height / 2 + 10)
-    .attr("text-anchor", "middle")
-    .attr("font-size", "12px")
-    .attr("fill", "#bbb")
-    .text("Total Titles");
-
-  // Legend
+  // Legend on the right
   const legend = g.append("g")
-    .attr("transform", `translate(${width / 2 - 60},${height - 50})`);
+    .attr("transform", `translate(${centerX + radius + 25}, ${centerY - 20})`);
 
   pieData.forEach((d, i) => {
     legend.append("rect")
       .attr("x", 0)
-      .attr("y", i * 20)
-      .attr("width", 12)
-      .attr("height", 12)
+      .attr("y", i * 22)
+      .attr("width", 14)
+      .attr("height", 14)
       .attr("fill", color(d.label));
 
     legend.append("text")
-      .attr("x", 18)
-      .attr("y", i * 20 + 10)
+      .attr("x", 20)
+      .attr("y", i * 22 + 11)
       .attr("font-size", "12px")
       .attr("fill", "#e5e7eb")
       .text(`${d.label}: ${d.value}`);
@@ -609,8 +686,8 @@ function drawYearTrend(data) {
     v => v.length,
     d => d.release_year
   )
-  .map(([year, count]) => ({ year, count }))
-  .sort((a, b) => a.year - b.year);
+    .map(([year, count]) => ({ year, count }))
+    .sort((a, b) => a.year - b.year);
 
   if (trendData.length === 0) {
     g.append("text")
