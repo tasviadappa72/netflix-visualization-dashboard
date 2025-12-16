@@ -4,111 +4,102 @@
   <meta charset="UTF-8" />
   <title>Netflix Explorer Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <!-- D3 -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
-  <!-- Word cloud layout -->
+  <!-- Word cloud layout (no longer needed, but safe to keep if you add it back later) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-cloud/1.2.5/d3.layout.cloud.min.js"></script>
-
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app">
-    <!-- Left sidebar -->
-    <aside id="sidebar">
-      <header id="sidebar-title">
-        <h1>Netflix Explorer</h1>
-      </header>
+<div id="app">
+  <!-- Left sidebar -->
+  <aside id="sidebar">
+    <header id="sidebar-title">
+      <h1>Netflix Explorer</h1>
+    </header>
 
-      <!-- Word cloud -->
-      <section class="sidebar-section">
-        <div class="section-header">Title Word Cloud</div>
-        <div id="wordCloud"></div>
-      </section>
+    <!-- Year slider -->
+    <section class="sidebar-section">
+      <div class="section-header">Select Year</div>
+      <div class="year-row">
+        <span>Year:</span>
+        <span id="yearLabel">–</span>
+      </div>
+      <input type="range" id="yearSlider" />
+      <div class="slider-caption">
+        Move the slider to explore movies & TV shows released in a specific year (1970 onwards).
+      </div>
+    </section>
 
-      <!-- Year slider -->
-      <section class="sidebar-section">
-        <div class="section-header">Select Year</div>
-        <div class="year-row">
-          <span>Year:</span>
-          <span id="yearLabel">–</span>
-        </div>
-        <input type="range" id="yearSlider" />
-        <div class="slider-caption">
-          Move the slider to explore movies & TV shows released in a specific year (1970 onwards).
-        </div>
-      </section>
+    <!-- Genre filter -->
+    <section class="sidebar-section">
+      <div class="section-header">Select Genre</div>
+      <select id="genreSelect"></select>
+    </section>
 
-      <!-- Genre filter -->
-      <section class="sidebar-section">
-        <div class="section-header">Select Genre</div>
-        <select id="genreSelect"></select>
-      </section>
+    <!-- Rating filter -->
+    <section class="sidebar-section">
+      <div class="section-header">Select Rating</div>
+      <select id="ratingSelect"></select>
+    </section>
 
-      <!-- Rating filter -->
-      <section class="sidebar-section">
-        <div class="section-header">Select Rating</div>
-        <select id="ratingSelect"></select>
-      </section>
+    <!-- Country filter info -->
+    <section class="sidebar-section">
+      <div class="section-header">Country Filter</div>
+      <div class="country-info">
+        Click a country bubble on the map to filter all charts by that country.<br />
+        Current: <span id="countryLabel">All countries</span>
+      </div>
+    </section>
 
-      <!-- Country filter info -->
-      <section class="sidebar-section">
-        <div class="section-header">Country Filter</div>
-        <div class="country-info">
-          Click a country bubble on the map to filter all charts by that country.<br />
-          Current: <span id="countryLabel">All countries</span>
-        </div>
-      </section>
+    <!-- KPI Section -->
+    <section class="sidebar-section">
+      <div class="section-header">Key Metrics</div>
+      <div id="kpis">
+        <p>Total Titles: <span id="kpi-total-titles">0</span></p>
+        <p>Movies: <span id="kpi-movies">0</span></p>
+        <p>TV Shows: <span id="kpi-tv-shows">0</span></p>
+        <p>Avg Movie Duration: <span id="kpi-avg-movie-duration">–</span></p>
+        <p>Avg TV Seasons: <span id="kpi-avg-tv-seasons">–</span></p>
+      </div>
+    </section>
+  </aside>
 
-      <!-- KPI Section -->
-      <section class="sidebar-section">
-        <div class="section-header">Key Metrics</div>
-        <div id="kpis">
-          <p>Total Titles: <span id="kpi-total-titles">0</span></p>
-          <p>Movies: <span id="kpi-movies">0</span></p>
-          <p>TV Shows: <span id="kpi-tv-shows">0</span></p>
-          <p>Avg Movie Duration: <span id="kpi-avg-movie-duration">–</span></p>
-          <p>Avg TV Seasons: <span id="kpi-avg-tv-seasons">–</span></p>
-        </div>
-      </section>
-    </aside>
+  <!-- Main content -->
+  <main id="main">
+    <!-- Big Map -->
+    <section class="card card-wide">
+      <h2>Movies and TV Shows Produced Worldwide</h2>
+      <div id="mapContainer">
+        <div id="map"></div>
+      </div>
+    </section>
 
-    <!-- Main content -->
-    <main id="main">
-      <!-- Big Map -->
-      <section class="card card-wide">
-        <h2>Movies and TV Shows Produced Worldwide</h2>
-        <div id="mapContainer">
-          <div id="map"></div>
-        </div>
-      </section>
+    <!-- Middle Row: Pie + Trend -->
+    <section id="middle-row">
+      <div class="card">
+        <h2>Content Type Distribution</h2>
+        <div id="typePie"></div>
+      </div>
+      <div class="card">
+        <h2>Titles Released Over Years (1970+)</h2>
+        <div id="yearTrend"></div>
+      </div>
+    </section>
 
-      <!-- Middle Row: Pie + Trend -->
-      <section id="middle-row">
-        <div class="card">
-          <h2>Content Type Distribution</h2>
-          <div id="typePie"></div>
-        </div>
-        <div class="card">
-          <h2>Titles Released Over Years (1970+)</h2>
-          <div id="yearTrend"></div>
-        </div>
-      </section>
-
-      <!-- Bottom row -->
-      <section id="bottom-row">
-        <div class="card">
-          <h2>Top 10 Directors</h2>
-          <div id="topDirectors"></div>
-        </div>
-        <div class="card">
-          <h2>Durations</h2>
-          <div id="durations"></div>
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <script src="app.js"></script>
+    <!-- Bottom row -->
+    <section id="bottom-row">
+      <div class="card">
+        <h2>Top 10 Directors</h2>
+        <div id="topDirectors"></div>
+      </div>
+      <div class="card">
+        <h2>Durations</h2>
+        <div id="durations"></div>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="app.js"></script>
 </body>
 </html>
