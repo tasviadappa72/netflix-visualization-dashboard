@@ -7,8 +7,8 @@
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #0f0f0f;
-  color: #f5f5f5;
+  background: #0f172a;
+  color: #f1f5f9;
 }
 
 #app {
@@ -18,8 +18,8 @@ body {
 
 #sidebar {
   width: 300px;
-  background: #1a1a1a;
-  border-right: 3px solid #4b0000;
+  background: #1e293b;
+  border-right: 4px solid #648fff;  /* Soft blue border */
   padding: 16px 14px;
   display: flex;
   flex-direction: column;
@@ -30,16 +30,18 @@ body {
   margin: 0 0 12px 0;
   font-size: 28px;
   font-weight: 800;
-  color: #ef4444;
+  color: #648fff;
   letter-spacing: 4px;
   text-align: center;
+  text-shadow: 0 0 8px #648fff33;  /* Subtle glow */
 }
 
 .sidebar-section {
-  background: #242424;
+  background: #1e293b;
   border-radius: 10px;
-  border: 1px solid #4b0000;
+  border: 1px solid #334155;
   padding: 12px 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .section-header {
@@ -47,14 +49,9 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin-bottom: 10px;
-  color: #fb923c;
-  border-bottom: 2px solid #ef4444;
+  color: #94a3b8;
+  border-bottom: 2px solid #648fff;
   padding-bottom: 6px;
-}
-
-#wordCloud {
-  width: 100%;
-  height: 180px;
 }
 
 .year-row {
@@ -63,24 +60,27 @@ body {
   font-size: 0.85rem;
   margin-bottom: 6px;
   font-weight: 600;
+  color: #e2e8f0;
 }
 
 #yearSlider {
   width: 100%;
   height: 8px;
   border-radius: 5px;
-  background: #333;
+  background: #334155;
   outline: none;
   -webkit-appearance: none;
 }
 
 #yearSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: #ef4444;
+  background: #648fff;
   cursor: pointer;
+  border: 3px solid #fff;
+  box-shadow: 0 0 10px #648fff44;
 }
 
 .slider-caption {
@@ -94,67 +94,77 @@ body {
   width: 100%;
   padding: 10px;
   border-radius: 8px;
-  border: 1px solid #4b0000;
-  background: #181818;
-  color: #f5f5f5;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #f1f5f9;
   font-size: 0.9rem;
+}
+
+#genreSelect:focus,
+#ratingSelect:focus {
+  outline: 2px solid #648fff;
+  outline-offset: 2px;
 }
 
 .country-info {
   font-size: 0.85rem;
   color: #cbd5e1;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 /* KPIs */
 #kpis {
-  background: linear-gradient(135deg, #1a1a1a, #2d1111);
-  padding: 16px;
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  padding: 18px;
   border-radius: 12px;
-  border: 2px solid #ef4444;
+  border: 2px solid #648fff;
   margin-top: 8px;
+  box-shadow: 0 4px 20px #648fff22;
 }
 
 #kpis p {
-  margin: 12px 0;
-  font-size: 1rem;
-  color: #fbbf24;
-  font-weight: 700;
+  margin: 14px 0;
+  font-size: 1.05rem;
+  color: #e2e8f0;
+  font-weight: 600;
   display: flex;
   justify-content: space-between;
 }
 
 #kpis span {
-  color: #ef4444;
-  font-size: 1.5rem;
+  color: #648fff;
+  font-size: 1.6rem;
   font-weight: 900;
+  text-shadow: 0 0 8px #648fff44;
 }
 
 /* Main content */
 #main {
   flex: 1;
   padding: 20px;
-  background: #151515;
+  background: #0f172a;
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
 .card {
-  background: #1f1f1f;
+  background: #1e293b;
   border-radius: 12px;
-  border: 1px solid #4b0000;
-  padding: 14px;
+  border: 1px solid #334155;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .card h2 {
-  margin: 0 0 12px 0;
-  font-size: 1.3rem;
-  color: #fb923c;
+  margin: 0 0 14px 0;
+  font-size: 1.35rem;
+  color: #648fff;
   text-align: center;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1.5px;
+  text-shadow: 0 0 6px #648fff33;
 }
 
 .card-wide {
@@ -165,66 +175,95 @@ body {
   height: 460px;
   border-radius: 10px;
   overflow: hidden;
-  border: 2px solid #4b0000;
+  border: 3px solid #648fff;
+  box-shadow: 0 0 20px #648fff33;
 }
 
 #map {
   width: 100%;
   height: 100%;
-  background: #0a0a0a;
+  background: #0f172a;
 }
 
-/* Middle row */
-#middle-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-}
-
-#typePie,
-#yearTrend {
-  height: 300px;
-}
-
-/* Bottom row */
+/* Grid layouts */
+#middle-row,
 #bottom-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18px;
 }
 
+#typePie,
+#yearTrend,
 #topDirectors,
 #durations {
   height: 300px;
+  background: #1e293b;
+  border-radius: 8px;
 }
 
+/* SVG Elements */
 svg {
   width: 100%;
   height: 100%;
 }
 
 .country {
-  stroke: #555;
-  stroke-width: 0.6px;
-  fill: #1a1a1a;
+  stroke: #475569;
+  stroke-width: 0.8px;
+  fill: #1e293b;
 }
 
 .bubble {
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
+.bubble, .rect {
+  fill: #648fff !important;
+}
+
+.bubble:hover, .rect:hover {
+  stroke: #90cdf4;
+  stroke-width: 5;
+}
+
+text.country-label {
+  fill: #ffffff !important;
+  stroke: #000;
+  stroke-width: 4;
+  paint-order: stroke fill;
+  font-weight: bold;
+}
+
+.bubble[selected], .rect[selected] {
+  fill: #90cdf4 !important;
+  stroke: #fff !important;
+  stroke-width: 5 !important;
+}
+
+text[fill="#f97373"], rect[fill="#f97373"], path[fill="#f97373"],
+rect[fill="#fb923c"], path[fill="#fb923c"] {
+  fill: #fb923c !important;
+}
+
+/* Axes */
 .axis text {
-  fill: #e2e8f0;
+  fill: #cbd5e1;
   font-size: 11px;
 }
 
 .axis path,
 .axis line {
-  stroke: #64748b;
+  stroke: #475569;
 }
 
 .director-label {
-  font-size: 11px;
+  font-size: 11.5px;
   fill: #e2e8f0;
   font-weight: 600;
+}
+
+legend text {
+  fill: #e2e8f0 !important;
 }
