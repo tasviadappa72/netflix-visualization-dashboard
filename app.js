@@ -1,207 +1,208 @@
 // -------- Paths (local files) --------
-const DATA_PATH = "data/Netflix_Dataset.csv";
-const WORLD_GEO_PATH = "data/world.geojson";
+const DATA_PATH = "./data/Netflix_Dataset.csv";
+const WORLD_GEO_PATH = "./data/world.geojson";
+
+const WORLD_TOPO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json"; // (kept, but NOT used)
 
 // -------- Layout helpers --------
 const margin = { top: 20, right: 20, bottom: 35, left: 45 };
 const defaultWidth = 430;
 const defaultHeight = 240;
+
+// -------- Color-blind safe palette (Okabe–Ito inspired) --------
+const COLORS = {
+  primary: "#0072B2",
+  green: "#009E73",
+  orange: "#E69F00",
+  select: "#D55E00",
+  white: "#ffffff",
+  black: "#000000",
+  muted: "#94a3b8",
+  text: "#e2e8f0"
+};
+
 let allData = [];
 let worldGeo = null;
-let selectedCountry = null;
-let selectedType = null;
-let selectedDirector = null;
+let selectedCountry = null; // map click filter
+let selectedDirector = null; // top directors click filter
+let selectedType = null; // pie click filter
 
-// -------- SVG helper --------
-function createSvg(containerSelector, width = defaultWidth, height = defaultHeight) {
+// Utility: create an SVG in container
+function createSvg(containerSelector, width = defaultWidth, height = defaultHeight, customMargin = margin) {
   d3.select(containerSelector).selectAll("*").remove();
+
   const svg = d3.select(containerSelector)
     .append("svg")
-    .attr("width", width + margin.left + margin.right)
-    .attr("height", height + margin.top + margin.bottom);
+    .attr("width", "100%")
+    .attr("height", "100%")
+    .attr("viewBox", `0 0 ${width} ${height}`);
+
   const g = svg.append("g")
-    .attr("transform", `translate(${margin.left},${margin.top})`);
-  return { svg, g, width, height };
+    .attr("transform", `translate(${customMargin.left},${customMargin.top})`);
+
+  const innerWidth = width - customMargin.left - customMargin.right;
+  const innerHeight = height - customMargin.top - customMargin.bottom;
+
+  return { svg, g, width: innerWidth, height: innerHeight };
 }
 
-// -------- Helpers --------
-function parseCountries(str) {
-  if (!str) return [];
-  return str.split(",").map(s => s.trim()).filter(Boolean);
-}
-function parseGenres(str) {
-  if (!str) return [];
-  return str.split(",").map(s => s.trim()).filter(Boolean);
+// Helpers: parsing
+function parseCountries(countryStr) {
+  if (!countryStr) return [];
+  return countryStr.split(",").map(d => d.trim()).filter(Boolean);
 }
 
-// -------- Load data --------
-Promise.all([
-  d3.csv(DATA_PATH),
-  d3.json(WORLD_GEO_PATH)
-]).then(([rows, geo]) => {
-  worldGeo = geo;
-  allData = rows.map(d => ({
-    show_id: d.show_id,
-    type: d.type,
-    title: d.title,
-    director: d.director || "",
-    cast: d.cast || "",
-    country: d.country || "",
-    date_added: d.date_added || "",
-    release_year: d.release_year ? +d.release_year : null,
-    rating: d.rating || "Unknown",
-    duration: d.duration || "",
-    listed_in: d.listed_in || "",
-    description: d.description || ""
-  })).filter(d => d.title && d.type && d.release_year);
+function parseGenres(genreStr) {
+  if (!genreStr) return [];
+  return genreStr.split(",").map(d => d.trim()).filter(Boolean);
+}
 
-  console.log("Data loaded successfully! Total rows:", allData.length);
-  initFilters(allData);
-  updateAll();
-}).catch(err => {
-  console.error("Error loading data:", err);
-  alert("Data load failed. Check console (F12).");
-});
-
-// -------- Filters --------
+// Init filters
 function initFilters(data) {
-  const filteredData = data.filter(d => d.release_year >= 1980);
-  const years = filteredData.map(d => d.release_year).filter(y => y);
+  // Year slider
+  const years = data.map(d => +d.release_year).filter(Boolean);
   const minYear = d3.min(years);
   const maxYear = d3.max(years);
 
-  const yearSlider = d3.select("#yearSlider")
+  const slider = d3.select("#yearSlider");
+  slider
     .attr("min", minYear)
     .attr("max", maxYear)
-    .attr("value", minYear)
-    .attr("step", 1);
+    .attr("value", maxYear)
+    .on("input", function () {
+      d3.select("#yearLabel").text(this.value);
+      updateAll();
+    });
 
-  d3.select("#yearLabel").text(minYear);
+  d3.select("#yearLabel").text(maxYear);
 
-  yearSlider.on("input", () => {
-    const val = yearSlider.property("value");
-    d3.select("#yearLabel").text(val);
-    updateAll();
-  });
+  // Genre select
+  const genreSet = new Set();
+  data.forEach(d => parseGenres(d.listed_in).forEach(g => genreSet.add(g)));
+  const genres = ["All genres", ...Array.from(genreSet).sort()];
 
-  const allGenres = new Set();
-  filteredData.forEach(d => parseGenres(d.listed_in).forEach(g => allGenres.add(g)));
-  const sortedGenres = Array.from(allGenres).sort();
-
-  const genreSelect = d3.select("#genreSelect");
-  genreSelect.selectAll("*").remove();
-  genreSelect.append("option").attr("value", "All").text("All genres");
-  genreSelect.selectAll("option").data(sortedGenres).enter()
+  const genreSel = d3.select("#genreSelect");
+  genreSel.selectAll("option").remove();
+  genreSel
+    .selectAll("option")
+    .data(genres)
+    .enter()
     .append("option")
     .attr("value", d => d)
     .text(d => d);
-  genreSelect.on("change", updateAll);
 
-  const allRatings = Array.from(new Set(filteredData.map(d => d.rating || "Unknown"))).sort();
-  const ratingSelect = d3.select("#ratingSelect");
-  ratingSelect.selectAll("*").remove();
-  ratingSelect.append("option").attr("value", "All").text("All ratings");
-  ratingSelect.selectAll("option").data(allRatings).enter()
+  genreSel.on("change", updateAll);
+
+  // Rating select
+  const ratingSet = new Set(data.map(d => d.rating).filter(Boolean));
+  const ratings = ["All ratings", ...Array.from(ratingSet).sort()];
+
+  const ratingSel = d3.select("#ratingSelect");
+  ratingSel.selectAll("option").remove();
+  ratingSel
+    .selectAll("option")
+    .data(ratings)
+    .enter()
     .append("option")
     .attr("value", d => d)
     .text(d => d);
-  ratingSelect.on("change", updateAll);
+
+  ratingSel.on("change", updateAll);
 
   d3.select("#countryLabel").text("All countries");
 }
 
-// -------- Get filtered data --------
+// Filtering logic
 function getFilteredData() {
-  const selectedYear = +d3.select("#yearSlider").property("value");
-  const selectedGenre = d3.select("#genreSelect").property("value");
-  const selectedRating = d3.select("#ratingSelect").property("value");
+  const year = +d3.select("#yearSlider").property("value");
+  const genre = d3.select("#genreSelect").property("value");
+  const rating = d3.select("#ratingSelect").property("value");
 
-  let filtered = allData.filter(d => d.release_year === selectedYear);
+  let filtered = allData.filter(d => +d.release_year === year);
 
-  if (selectedGenre && selectedGenre !== "All") {
-    filtered = filtered.filter(d => parseGenres(d.listed_in).includes(selectedGenre));
+  if (genre && genre !== "All genres") {
+    filtered = filtered.filter(d => parseGenres(d.listed_in).includes(genre));
   }
-  if (selectedRating && selectedRating !== "All") {
-    filtered = filtered.filter(d => d.rating === selectedRating);
+
+  if (rating && rating !== "All ratings") {
+    filtered = filtered.filter(d => d.rating === rating);
   }
+
   if (selectedCountry) {
     filtered = filtered.filter(d => parseCountries(d.country).includes(selectedCountry));
   }
+
   if (selectedType) {
     filtered = filtered.filter(d => d.type === selectedType);
   }
+
   if (selectedDirector) {
-    filtered = filtered.filter(d =>
-      d.director && d.director.split(",").map(x => x.trim()).includes(selectedDirector)
-    );
+    filtered = filtered.filter(d => (d.director || "").includes(selectedDirector));
   }
+
   return filtered;
 }
 
-// -------- KPIs --------
+// KPIs
 function updateKPIs(data) {
-  if (!data || data.length === 0) {
-    d3.select("#kpi-total-titles").text("0");
-    d3.select("#kpi-movies").text("0");
-    d3.select("#kpi-tv-shows").text("0");
-    d3.select("#kpi-avg-movie-duration").text("–");
-    d3.select("#kpi-avg-tv-seasons").text("–");
-    return;
-  }
-
   const total = data.length;
-  const movies = data.filter(d => d.type === "Movie");
-  const tvShows = data.filter(d => d.type === "TV Show");
+  const movies = data.filter(d => d.type === "Movie").length;
+  const tv = data.filter(d => d.type === "TV Show").length;
 
-  const movieDurations = movies
-    .map(d => {
-      const match = d.duration.match(/(\d+) min/);
-      return match ? +match[1] : null;
-    })
-    .filter(v => v !== null);
-  const avgMovie = movieDurations.length > 0 ? Math.round(d3.mean(movieDurations)) : 0;
+  // Avg movie duration (minutes)
+  const movieMinutes = data
+    .filter(d => d.type === "Movie" && d.duration && d.duration.includes("min"))
+    .map(d => +d.duration.replace(" min", ""))
+    .filter(n => !isNaN(n));
 
-  const tvSeasons = tvShows
-    .map(d => {
-      const match = d.duration.match(/(\d+) Season/);
-      return match ? +match[1] : null;
-    })
-    .filter(v => v !== null);
-  const avgTV = tvSeasons.length > 0 ? d3.mean(tvSeasons).toFixed(1) : 0;
+  const avgMovieDuration = movieMinutes.length ? Math.round(d3.mean(movieMinutes)) : null;
+
+  // Avg TV seasons
+  const tvSeasons = data
+    .filter(d => d.type === "TV Show" && d.duration && d.duration.includes("Season"))
+    .map(d => +d.duration.split(" ")[0])
+    .filter(n => !isNaN(n));
+
+  const avgTVSeasons = tvSeasons.length ? (d3.mean(tvSeasons)).toFixed(1) : null;
 
   d3.select("#kpi-total-titles").text(total);
-  d3.select("#kpi-movies").text(movies.length);
-  d3.select("#kpi-tv-shows").text(tvShows.length);
-  d3.select("#kpi-avg-movie-duration").text(avgMovie ? `${avgMovie} min` : "–");
-  d3.select("#kpi-avg-tv-seasons").text(avgTV || "–");
+  d3.select("#kpi-movies").text(movies);
+  d3.select("#kpi-tv-shows").text(tv);
+  d3.select("#kpi-avg-movie-duration").text(avgMovieDuration ? `${avgMovieDuration} min` : "–");
+  d3.select("#kpi-avg-tv-seasons").text(avgTVSeasons ? `${avgTVSeasons}` : "–");
 }
 
-// -------- Master update --------
+// Update all charts
 function updateAll() {
   const filtered = getFilteredData();
+
   updateKPIs(filtered);
   drawMap(filtered);
+  drawTypePie(filtered);
+  drawYearTrend(filtered);
   drawTopDirectors(filtered);
   drawDurations(filtered);
-  drawTypePie(filtered);
-  drawYearTrend(allData);
 }
 
-// -------- World Map --------
-function drawMap(data) {
-  const { g, width, height } = createSvg("#map", 760, 340);
-  if (!worldGeo) return;
+// MAP
+function drawMap(filteredData) {
+  const MAP_INNER_W = 760;
+  const MAP_INNER_H = 340;
 
-  const exploded = [];
-  data.forEach(d => {
-    const countries = parseCountries(d.country);
-    countries.forEach(c => exploded.push({ country: c }));
-  });
+  const { g, width, height } = createSvg(
+    "#map",
+    MAP_INNER_W + margin.left + margin.right,
+    MAP_INNER_H + margin.top + margin.bottom,
+    margin
+  );
+
+  if (!worldGeo) return;
 
   const projection = d3.geoMercator()
     .fitSize([width, height], worldGeo)
     .scale(130)
     .translate([width / 2, height / 1.5]);
+
   const path = d3.geoPath().projection(projection);
 
   g.selectAll("path.country")
@@ -211,28 +212,40 @@ function drawMap(data) {
     .attr("class", "country")
     .attr("d", path);
 
+  const exploded = [];
+  filteredData.forEach(d => {
+    parseCountries(d.country).forEach(c => exploded.push({ country: c }));
+  });
+
   if (!exploded.length) {
     g.append("text")
       .attr("x", width / 2)
       .attr("y", height / 2)
       .attr("text-anchor", "middle")
-      .attr("fill", "#94a3b8")
+      .attr("fill", COLORS.muted)
       .text("No country data for current filters.");
     return;
   }
 
   const countsArr = d3.rollups(exploded, v => v.length, d => d.country);
   const countsMap = new Map(countsArr.map(([c, n]) => [c, n]));
-  const maxCount = d3.max(countsArr, d => d[1]);
-  const circleScale = d3.scaleSqrt().domain([0, maxCount]).range([6, 32]);
+  const maxCount = d3.max(countsArr, d => d[1]) || 1;
+
+  const circleScale = d3.scaleSqrt()
+    .domain([0, maxCount])
+    .range([6, 32]);
 
   const bubbleData = worldGeo.features
     .map(feat => {
-      const name = feat.properties.name;
+      const name = feat.properties && (feat.properties.name || feat.properties.NAME);
+      if (!name) return null;
+
       const count = countsMap.get(name);
       if (!count) return null;
+
       const centroid = path.centroid(feat);
       if (!centroid || centroid.some(isNaN)) return null;
+
       return { name, count, x: centroid[0], y: centroid[1] };
     })
     .filter(Boolean);
@@ -242,7 +255,7 @@ function drawMap(data) {
       .attr("x", width / 2)
       .attr("y", height / 2)
       .attr("text-anchor", "middle")
-      .attr("fill", "#94a3b8")
+      .attr("fill", COLORS.muted)
       .text("No country data for current filters.");
     return;
   }
@@ -260,16 +273,17 @@ function drawMap(data) {
     .attr("cx", d => d.x)
     .attr("cy", d => d.y)
     .attr("r", d => circleScale(d.count))
-    .attr("fill", d => selectedCountry === d.name ? "#90cdf4" : "#648fff")
+    .attr("fill", d => selectedCountry === d.name ? COLORS.select : COLORS.green)
     .attr("fill-opacity", 0.9)
-    .attr("stroke", "#fff")
+    .attr("stroke", COLORS.white)
     .attr("stroke-width", d => selectedCountry === d.name ? 5 : 2)
     .style("cursor", "pointer")
     .on("mouseover", function () {
-      d3.select(this).attr("stroke", "#90cdf4").attr("stroke-width", 6);
+      d3.select(this).attr("stroke", COLORS.orange).attr("stroke-width", 6);
     })
     .on("mouseout", function (event, d) {
-      d3.select(this).attr("stroke", "#fff")
+      d3.select(this)
+        .attr("stroke", COLORS.white)
         .attr("stroke-width", selectedCountry === d.name ? 5 : 2);
     })
     .on("click", (event, d) => {
@@ -290,8 +304,8 @@ function drawMap(data) {
     .attr("text-anchor", "middle")
     .attr("font-size", "11px")
     .attr("font-weight", "bold")
-    .attr("fill", "#ffffff")
-    .attr("stroke", "#000")
+    .attr("fill", COLORS.white)
+    .attr("stroke", COLORS.black)
     .attr("stroke-width", 3)
     .attr("paint-order", "stroke fill")
     .style("pointer-events", "none")
@@ -300,10 +314,12 @@ function drawMap(data) {
 
 // -------- Top Directors --------
 function drawTopDirectors(data) {
-  const { g, width, height } = createSvg("#topDirectors");
+  const { g, width, height } = createSvg("#topDirectors", 760, 420);
+
   const directors = data
-    .filter(d => d.director)
-    .flatMap(d => d.director.split(",").map(x => x.trim()))
+    .map(d => d.director)
+    .filter(Boolean)
+    .flatMap(d => d.split(",").map(x => x.trim()))
     .filter(Boolean);
 
   if (!directors.length) {
@@ -311,7 +327,7 @@ function drawTopDirectors(data) {
       .attr("x", width / 2)
       .attr("y", height / 2)
       .attr("text-anchor", "middle")
-      .attr("fill", "#94a3b8")
+      .attr("fill", COLORS.muted)
       .text("No director data for current filters.");
     return;
   }
@@ -322,264 +338,450 @@ function drawTopDirectors(data) {
     .slice(0, 10);
 
   const y = d3.scaleBand().domain(grouped.map(d => d.director)).range([0, height]).padding(0.15);
-  const x = d3.scaleLinear().domain([0, d3.max(grouped, d => d.count)]).nice().range([0, width]);
+  const x = d3.scaleLinear().domain([0, d3.max(grouped, d => d.count)]).range([0, width]);
 
   g.selectAll("rect")
     .data(grouped)
     .enter()
     .append("rect")
+    .attr("class", "rect")
     .attr("y", d => y(d.director))
-    .attr("x", 0)
     .attr("height", y.bandwidth())
+    .attr("x", 0)
     .attr("width", d => x(d.count))
-    .attr("fill", d => selectedDirector === d.director ? "#90cdf4" : "#648fff")
+    .attr("fill", d => selectedDirector === d.director ? COLORS.select : COLORS.primary)
     .style("cursor", "pointer")
     .on("click", (event, d) => {
       selectedDirector = selectedDirector === d.director ? null : d.director;
       updateAll();
     })
     .append("title")
-    .text(d => `${d.director}\nTitles: ${d.count}`);
+    .text(d => `${d.director}: ${d.count}`);
 
-  g.selectAll("text.director-label")
+  g.selectAll(".director-label")
     .data(grouped)
     .enter()
     .append("text")
-    .attr("x", 4)
-    .attr("y", d => y(d.director) + y.bandwidth() / 2 + 3)
+    .attr("class", "director-label")
+    .attr("x", 8)
+    .attr("y", d => y(d.director) + y.bandwidth() / 2 + 4)
     .text(d => d.director);
 
-  g.append("g").attr("class", "axis").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x).ticks(5));
+  const xAxis = d3.axisBottom(x).ticks(4).tickSizeOuter(0);
+  g.append("g")
+    .attr("class", "axis")
+    .attr("transform", `translate(0, ${height})`)
+    .call(xAxis);
+
   g.append("text")
     .attr("x", width / 2)
-    .attr("y", height + 30)
+    .attr("y", height + 32)
     .attr("text-anchor", "middle")
-    .attr("fill", "#e2e8f0")
+    .attr("fill", COLORS.text)
     .attr("font-size", "12px")
     .text("Number of Titles");
 }
 
 // -------- Durations --------
 function drawDurations(data) {
-  const { g, width, height } = createSvg("#durations");
-  const movieDurations = data
+  const container = d3.select("#durations");
+  container.selectAll("*").remove();
+
+  const w = 430, h = 300;
+
+  const svg = container.append("svg")
+    .attr("width", "100%")
+    .attr("height", "100%")
+    .attr("viewBox", `0 0 ${w} ${h}`);
+
+  // Two charts side-by-side
+  const left = { x: 35, y: 35, w: 190, h: 220 };
+  const right = { x: 245, y: 35, w: 170, h: 220 };
+
+  // Movies minutes
+  const movieMinutes = data
     .filter(d => d.type === "Movie" && d.duration && d.duration.includes("min"))
-    .map(d => +d.duration.match(/(\d+) min/)[1])
-    .filter(v => !isNaN(v));
-  const tvDurations = data
-    .filter(d => d.type === "TV Show" && d.duration)
-    .map(d => +d.duration.match(/(\d+) Season/)[1])
-    .filter(v => !isNaN(v));
+    .map(d => +d.duration.replace(" min", ""))
+    .filter(n => !isNaN(n));
 
-  if (!movieDurations.length && !tvDurations.length) {
-    g.append("text")
-      .attr("x", width / 2)
-      .attr("y", height / 2)
-      .attr("text-anchor", "middle")
-      .attr("fill", "#94a3b8")
-      .text("No duration data for current filters.");
-    return;
-  }
+  // TV seasons
+  const tvSeasons = data
+    .filter(d => d.type === "TV Show" && d.duration && d.duration.includes("Season"))
+    .map(d => +d.duration.split(" ")[0])
+    .filter(n => !isNaN(n));
 
-  const widthHalf = width / 2 - 20;
-  const maxCount = Math.max(
-    movieDurations.length ? d3.max(d3.bin()(movieDurations).map(b => b.length)) : 0,
-    tvDurations.length ? d3.max(d3.rollups(tvDurations, v => v.length, d => d).map(d => d[1])) : 0
-  );
+  // Movie histogram
+  if (movieMinutes.length) {
+    const x = d3.scaleLinear()
+      .domain(d3.extent(movieMinutes))
+      .nice()
+      .range([left.x, left.x + left.w]);
 
-  if (movieDurations.length) {
-    const xM = d3.scaleLinear().domain(d3.extent(movieDurations)).nice().range([0, widthHalf]);
-    const yM = d3.scaleLinear().domain([0, maxCount]).range([height, 0]);
-    const bins = d3.bin().thresholds(10)(movieDurations);
-    const movieGroup = g.append("g");
-    movieGroup.selectAll("rect")
+    const bins = d3.bin()
+      .domain(x.domain())
+      .thresholds(10)(movieMinutes);
+
+    const y = d3.scaleLinear()
+      .domain([0, d3.max(bins, d => d.length)])
+      .nice()
+      .range([left.y + left.h, left.y]);
+
+    svg.selectAll("rect.movie")
       .data(bins)
       .enter()
       .append("rect")
-      .attr("x", d => xM(d.x0))
-      .attr("y", d => yM(d.length))
-      .attr("width", d => Math.max(0, xM(d.x1) - xM(d.x0) - 1))
-      .attr("height", d => height - yM(d.length))
-      .attr("fill", "#648fff")
-      .append("title")
-      .text(d => `${d.x0}–${d.x1} min: ${d.length}`);
-    movieGroup.append("g").attr("class", "axis").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xM).ticks(5));
-    movieGroup.append("g").attr("class", "axis").call(d3.axisLeft(yM).ticks(4));
-    movieGroup.append("text")
-      .attr("x", widthHalf / 2)
-      .attr("y", -6)
+      .attr("class", "movie")
+      .attr("x", d => x(d.x0) + 1)
+      .attr("y", d => y(d.length))
+      .attr("width", d => Math.max(0, x(d.x1) - x(d.x0) - 2))
+      .attr("height", d => (left.y + left.h) - y(d.length))
+      .attr("fill", COLORS.primary)
+      .attr("opacity", 0.9);
+
+    const xAxis = d3.axisBottom(x).ticks(4);
+    const yAxis = d3.axisLeft(y).ticks(3);
+
+    svg.append("g")
+      .attr("class", "axis")
+      .attr("transform", `translate(0, ${left.y + left.h})`)
+      .call(xAxis);
+
+    svg.append("g")
+      .attr("class", "axis")
+      .attr("transform", `translate(${left.x},0)`)
+      .call(yAxis);
+
+    svg.append("text")
+      .attr("x", left.x + left.w / 2)
+      .attr("y", 20)
       .attr("text-anchor", "middle")
-      .attr("fill", "#90cdf4")
+      .attr("fill", COLORS.primary)
+      .attr("font-weight", 700)
       .text("Movies (minutes)");
+  } else {
+    svg.append("text")
+      .attr("x", left.x + left.w / 2)
+      .attr("y", left.y + left.h / 2)
+      .attr("text-anchor", "middle")
+      .attr("fill", COLORS.muted)
+      .text("No movie duration data");
   }
 
-  if (tvDurations.length) {
-    const tvCounts = d3.rollups(tvDurations, v => v.length, d => d)
-      .map(([seasons, count]) => ({ seasons, count }))
-      .sort((a, b) => a.seasons - b.seasons);
-    const xT = d3.scaleBand().domain(tvCounts.map(d => d.seasons)).range([widthHalf + 40, width]).padding(0.2);
-    const yT = d3.scaleLinear().domain([0, maxCount]).range([height, 0]);
-    const tvGroup = g.append("g");
-    tvGroup.selectAll("rect")
-      .data(tvCounts)
+  // TV histogram
+  if (tvSeasons.length) {
+    const x = d3.scaleLinear()
+      .domain([1, d3.max(tvSeasons)])
+      .nice()
+      .range([right.x, right.x + right.w]);
+
+    const bins = d3.bin()
+      .domain(x.domain())
+      .thresholds(d3.range(1, d3.max(tvSeasons) + 1))(tvSeasons);
+
+    const y = d3.scaleLinear()
+      .domain([0, d3.max(bins, d => d.length)])
+      .nice()
+      .range([right.y + right.h, right.y]);
+
+    svg.selectAll("rect.tv")
+      .data(bins)
       .enter()
       .append("rect")
-      .attr("x", d => xT(d.seasons))
-      .attr("y", d => yT(d.count))
-      .attr("width", xT.bandwidth())
-      .attr("height", d => height - yT(d.count))
-      .attr("fill", "#fb923c")
-      .append("title")
-      .text(d => `${d.seasons} season(s): ${d.count}`);
-    tvGroup.append("g").attr("class", "axis").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xT));
-    tvGroup.append("g").attr("class", "axis").attr("transform", `translate(${width},0)`).call(d3.axisRight(yT).ticks(4));
-    tvGroup.append("text")
-      .attr("x", widthHalf + (width - widthHalf) / 2 + 20)
-      .attr("y", -6)
+      .attr("class", "tv")
+      .attr("x", d => x(d.x0) + 1)
+      .attr("y", d => y(d.length))
+      .attr("width", d => Math.max(0, x(d.x1) - x(d.x0) - 2))
+      .attr("height", d => (right.y + right.h) - y(d.length))
+      .attr("fill", COLORS.orange)
+      .attr("opacity", 0.9);
+
+    const xAxis = d3.axisBottom(x).ticks(4).tickFormat(d3.format("d"));
+    const yAxis = d3.axisRight(y).ticks(3);
+
+    svg.append("g")
+      .attr("class", "axis")
+      .attr("transform", `translate(0, ${right.y + right.h})`)
+      .call(xAxis);
+
+    svg.append("g")
+      .attr("class", "axis")
+      .attr("transform", `translate(${right.x + right.w},0)`)
+      .call(yAxis);
+
+    svg.append("text")
+      .attr("x", right.x + right.w / 2)
+      .attr("y", 20)
       .attr("text-anchor", "middle")
-      .attr("fill", "#fb923c")
+      .attr("fill", COLORS.orange)
+      .attr("font-weight", 700)
       .text("TV Shows (seasons)");
+  } else {
+    svg.append("text")
+      .attr("x", right.x + right.w / 2)
+      .attr("y", right.y + right.h / 2)
+      .attr("text-anchor", "middle")
+      .attr("fill", COLORS.muted)
+      .text("No TV duration data");
   }
+
+  // ---- Axis labels ----
+  // Movies X-axis
+  svg.append("text")
+    .attr("x", left.x + left.w / 2)
+    .attr("y", h - 6)
+    .attr("text-anchor", "middle")
+    .attr("fill", COLORS.text)
+    .attr("font-size", "11px")
+    .text("Duration (minutes)");
+
+  // Movies Y-axis
+  svg.append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -(left.y + left.h / 2))
+    .attr("y", 14)
+    .attr("text-anchor", "middle")
+    .attr("fill", COLORS.text)
+    .attr("font-size", "11px")
+    .text("Count");
+
+  // TV Shows X-axis
+  svg.append("text")
+    .attr("x", right.x + right.w / 2)
+    .attr("y", h - 6)
+    .attr("text-anchor", "middle")
+    .attr("fill", COLORS.text)
+    .attr("font-size", "11px")
+    .text("Number of Seasons");
+
+  // TV Shows Y-axis
+  svg.append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -(right.y + right.h / 2))
+    .attr("y", right.x + right.w + 32)
+    .attr("text-anchor", "middle")
+    .attr("fill", COLORS.text)
+    .attr("font-size", "11px")
+    .text("Count");
 }
 
-// -------- Pie Chart --------
+// Pie: Type distribution
 function drawTypePie(data) {
-  const { g, width, height } = createSvg("#typePie", 300, 280);
+  const { g, width, height } = createSvg("#typePie", 430, 300);
+
   if (!data.length) {
     g.append("text")
       .attr("x", width / 2)
       .attr("y", height / 2)
       .attr("text-anchor", "middle")
-      .attr("fill", "#94a3b8")
-      .text("No data");
+      .attr("fill", COLORS.muted)
+      .text("No data for current filters.");
     return;
   }
 
-  const movies = data.filter(d => d.type === "Movie").length;
-  const tvShows = data.filter(d => d.type === "TV Show").length;
-  const pieData = [
-    { label: "Movies", value: movies },
-    { label: "TV Shows", value: tvShows }
-  ].filter(d => d.value > 0);
+  const counts = d3.rollups(data, v => v.length, d => d.type);
+  const total = d3.sum(counts, d => d[1]);
 
-  const radius = Math.min(width, height) / 2 - 30;
-  const centerX = width / 2 - 40;
-  const centerY = height / 2 + 10;
+  const pieData = counts.map(([type, count]) => ({ type, count }));
 
-  const pie = d3.pie().value(d => d.value);
-  const arc = d3.arc().innerRadius(0).outerRadius(radius);
+  const radius = Math.min(width, height) / 2 - 6;
+
+  const pie = d3.pie()
+    .sort(null)
+    .value(d => d.count);
+
+  const arc = d3.arc()
+    .innerRadius(0)
+    .outerRadius(radius);
 
   const color = d3.scaleOrdinal()
-    .domain(pieData.map(d => d.label))
-    .range(["#648fff", "#fb923c"]);  // Soft blue for Movies, Orange for TV Shows
+    .domain(["Movie", "TV Show"])
+    .range([COLORS.primary, COLORS.orange]);
 
-  const pieGroup = g.append("g").attr("transform", `translate(${centerX},${centerY})`);
-  const typeMap = { "Movies": "Movie", "TV Shows": "TV Show" };
+  const center = g.append("g")
+    .attr("transform", `translate(${width / 2}, ${height / 2})`);
 
-  const arcs = pieGroup.selectAll("g.arc")
+  const typeMap = { Movie: "Movie", "TV Show": "TV Show" };
+
+  center.selectAll("path")
     .data(pie(pieData))
     .enter()
-    .append("g")
-    .attr("class", "arc");
-
-  arcs.append("path")
+    .append("path")
     .attr("d", arc)
-    .attr("fill", d => selectedType === typeMap[d.data.label] ? "#90cdf4" : color(d.data.label))
-    .attr("stroke", "#fff")
+    .attr("stroke", COLORS.white)
     .attr("stroke-width", 2)
+    .attr("fill", d => selectedType === typeMap[d.data.type] ? COLORS.select : color(d.data.type))
     .style("cursor", "pointer")
     .on("click", (event, d) => {
-      const t = typeMap[d.data.label];
+      const t = typeMap[d.data.type];
       selectedType = selectedType === t ? null : t;
       updateAll();
     })
     .append("title")
-    .text(d => `${d.data.label}: ${d.data.value} (${((d.data.value / data.length) * 100).toFixed(1)}%)`);
+    .text(d => `${d.data.type}: ${d.data.count}`);
 
-  g.append("text")
-    .attr("x", centerX)
-    .attr("y", centerY - radius - 12)
+  center.append("text")
+    .attr("y", -radius - 10)
     .attr("text-anchor", "middle")
-    .attr("font-size", "14px")
-    .attr("font-weight", "bold")
-    .attr("fill", "#ffffff")
-    .text(`Total Titles: ${data.length}`);
+    .attr("fill", COLORS.text)
+    .attr("font-weight", 700)
+    .text(`Total Titles: ${total}`);
 
   const legend = g.append("g")
-    .attr("transform", `translate(${centerX + radius + 25}, ${centerY - 20})`);
-  pieData.forEach((d, i) => {
-    legend.append("rect")
-      .attr("x", 0)
-      .attr("y", i * 22)
-      .attr("width", 14)
-      .attr("height", 14)
-      .attr("fill", color(d.label));
-    legend.append("text")
-      .attr("x", 20)
-      .attr("y", i * 22 + 11)
-      .attr("font-size", "12px")
-      .attr("fill", "#e5e7eb")
-      .text(`${d.label}: ${d.value}`);
-  });
+    .attr("transform", `translate(${width - 60}, 40)`);
+
+  const legendItems = ["Movie", "TV Show"];
+
+  legend.selectAll("rect")
+    .data(legendItems)
+    .enter()
+    .append("rect")
+    .attr("x", 0)
+    .attr("y", (d, i) => i * 22)
+    .attr("width", 12)
+    .attr("height", 12)
+    .attr("fill", d => color(d));
+
+  legend.selectAll("text")
+    .data(legendItems)
+    .enter()
+    .append("text")
+    .attr("x", 18)
+    .attr("y", (d, i) => i * 22 + 10)
+    .attr("fill", COLORS.text)
+    .attr("font-size", "12px")
+    .text(d => {
+      const found = pieData.find(x => x.type === d);
+      return `${d}: ${found ? found.count : 0}`;
+    });
 }
 
-// -------- Year Trend --------
+// Trend: Titles released over years
 function drawYearTrend(data) {
-  const { g, width, height } = createSvg("#yearTrend", 500, 280);
-  const trendData = d3.rollups(
-    data.filter(d => d.release_year >= 1970),
+  const { g, width, height } = createSvg("#yearTrend", 430, 300);
+
+  const genre = d3.select("#genreSelect").property("value");
+  const rating = d3.select("#ratingSelect").property("value");
+
+  let filtered = allData.slice();
+
+  if (genre && genre !== "All genres") {
+    filtered = filtered.filter(d => parseGenres(d.listed_in).includes(genre));
+  }
+  if (rating && rating !== "All ratings") {
+    filtered = filtered.filter(d => d.rating === rating);
+  }
+  if (selectedCountry) {
+    filtered = filtered.filter(d => parseCountries(d.country).includes(selectedCountry));
+  }
+  if (selectedType) {
+    filtered = filtered.filter(d => d.type === selectedType);
+  }
+  if (selectedDirector) {
+    filtered = filtered.filter(d => (d.director || "").includes(selectedDirector));
+  }
+
+  const rolled = d3.rollups(
+    filtered,
     v => v.length,
-    d => d.release_year
+    d => +d.release_year
   )
     .map(([year, count]) => ({ year, count }))
+    .filter(d => !isNaN(d.year))
     .sort((a, b) => a.year - b.year);
 
-  if (trendData.length === 0) {
+  if (!rolled.length) {
     g.append("text")
       .attr("x", width / 2)
       .attr("y", height / 2)
       .attr("text-anchor", "middle")
-      .attr("fill", "#94a3b8")
-      .text("No data");
+      .attr("fill", COLORS.muted)
+      .text("No trend data for current filters.");
     return;
   }
 
-  const x = d3.scaleLinear().domain(d3.extent(trendData, d => d.year)).range([0, width]);
-  const y = d3.scaleLinear().domain([0, d3.max(trendData, d => d.count)]).nice().range([height, 0]);
+  const x = d3.scaleLinear()
+    .domain(d3.extent(rolled, d => d.year))
+    .range([0, width]);
+
+  const y = d3.scaleLinear()
+    .domain([0, d3.max(rolled, d => d.count)])
+    .nice()
+    .range([height, 0]);
+
+  const area = d3.area()
+    .x(d => x(d.year))
+    .y0(height)
+    .y1(d => y(d.count));
+
+  g.append("path")
+    .datum(rolled)
+    .attr("fill", COLORS.green)
+    .attr("opacity", 0.18)
+    .attr("d", area);
 
   const line = d3.line()
     .x(d => x(d.year))
-    .y(d => y(d.count))
-    .curve(d3.curveMonotoneX);
+    .y(d => y(d.count));
 
   g.append("path")
-    .datum(trendData)
+    .datum(rolled)
     .attr("fill", "none")
-    .attr("stroke", "#648fff")
+    .attr("stroke", COLORS.green)
     .attr("stroke-width", 3)
     .attr("d", line);
 
-  g.append("path")
-    .datum(trendData)
-    .attr("fill", "#648fff")
-    .attr("fill-opacity", 0.2)
-    .attr("d", d3.area()
-      .x(d => x(d.year))
-      .y0(height)
-      .y1(d => y(d.count))
-      .curve(d3.curveMonotoneX));
-
   g.selectAll("circle")
-    .data(trendData)
+    .data(rolled)
     .enter()
     .append("circle")
     .attr("cx", d => x(d.year))
     .attr("cy", d => y(d.count))
-    .attr("r", 4)
-    .attr("fill", "#648fff")
+    .attr("r", 3.5)
+    .attr("fill", COLORS.green)
     .append("title")
-    .text(d => `${d.year}: ${d.count} titles`);
+    .text(d => `${d.year}: ${d.count}`);
 
-  g.append("g").attr("class", "axis").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x).tickFormat(d3.format("d")));
-  g.append("g").attr("class", "axis").call(d3.axisLeft(y));
+  const xAxis = d3.axisBottom(x).ticks(5).tickFormat(d3.format("d"));
+  const yAxis = d3.axisLeft(y).ticks(5);
+
+  g.append("g")
+    .attr("class", "axis")
+    .attr("transform", `translate(0, ${height})`)
+    .call(xAxis);
+
+  g.append("g")
+    .attr("class", "axis")
+    .call(yAxis);
+
+  // ✅ Axis labels MUST be inside the function (so g/width/height exist)
+  g.append("text")
+    .attr("x", width / 2)
+    .attr("y", height + 38)
+    .attr("text-anchor", "middle")
+    .attr("fill", COLORS.text)
+    .attr("font-size", "12px")
+    .text("Release Year");
+
+  g.append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -height / 2)
+    .attr("y", -38)
+    .attr("text-anchor", "middle")
+    .attr("fill", COLORS.text)
+    .attr("font-size", "12px")
+    .text("Number of Titles");
 }
+
+// Load data + start
+Promise.all([
+  d3.csv(DATA_PATH),
+  d3.json(WORLD_GEO_PATH)
+]).then(([csvData, geo]) => {
+  allData = csvData;
+  worldGeo = geo;
+
+  initFilters(allData);
+  updateAll();
+}).catch(err => {
+  console.error("Error loading data:", err);
+});
